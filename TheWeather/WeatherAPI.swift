@@ -41,15 +41,16 @@ struct WeatherAPI{
     
     var zipString = String()
     
-    
+    // MARK: - Single Day URL builder
     mutating func buildURLForZip(zip: String)-> URL{
         apiURLComponents.scheme = "https"
         apiURLComponents.host = "api.openweathermap.org"
         apiURLComponents.path = "/data/2.5/weather"
         apiURLComponents.queryItems = [
             URLQueryItem(name:"zip", value: zip),
-        URLQueryItem(name:"APPID", value:
-            WeatherAPI.APIKey)]
+            URLQueryItem(name:"APPID", value:
+                WeatherAPI.APIKey),
+            URLQueryItem(name: "units", value: "imperial")]
         let url = apiURLComponents.url
         print("\(url!)")
         return url!
@@ -62,7 +63,8 @@ struct WeatherAPI{
         apiURLComponents.queryItems = [
             URLQueryItem(name:"q", value: cityState),
             URLQueryItem(name:"APPID", value:
-                WeatherAPI.APIKey)]
+                WeatherAPI.APIKey),
+            URLQueryItem(name: "units", value: "imperial")]
         let url = apiURLComponents.url
         print("\(url!)")
         return url!
@@ -81,6 +83,81 @@ struct WeatherAPI{
         print("\(url!)")
         return url!
     }
+    mutating func buildURLForLatLon(latitude: Double, longitude: Double)-> URL{
+        apiURLComponents.scheme = "https"
+        apiURLComponents.host = "api.openweathermap.org"
+        apiURLComponents.path = "/data/2.5/weather"
+        apiURLComponents.queryItems = [
+            URLQueryItem(name:"lat", value: String(latitude)),
+            URLQueryItem(name:"lon", value: String(longitude)),
+            URLQueryItem(name:"APPID", value:
+                WeatherAPI.APIKey),
+            URLQueryItem(name: "units", value: "imperial")]
+        let url = apiURLComponents.url
+        print("\(url!)")
+        return url!
+    }
+    
+    
+    //MARK: - 5 day URL Builder
+    mutating func buildURLForZipMulti(zip: String)-> URL{
+        apiURLComponents.scheme = "https"
+        apiURLComponents.host = "api.openweathermap.org"
+        apiURLComponents.path = "/data/2.5/forecast"
+        apiURLComponents.queryItems = [
+            URLQueryItem(name:"zip", value: zip),
+            URLQueryItem(name:"APPID", value:
+                WeatherAPI.APIKey),
+            URLQueryItem(name: "units", value: "imperial"),
+            URLQueryItem(name: "cnt", value: "5")]
+        let url = apiURLComponents.url
+        print("\(url!)")
+        return url!
+    }
+    
+    mutating func buildURLForCityStateMulti(cityState: String)-> URL{
+        apiURLComponents.scheme = "https"
+        apiURLComponents.host = "api.openweathermap.org"
+        apiURLComponents.path = "/data/2.5/forecast"
+        apiURLComponents.queryItems = [
+            URLQueryItem(name:"q", value: cityState),
+            URLQueryItem(name:"APPID", value:
+                WeatherAPI.APIKey),
+            URLQueryItem(name: "units", value: "imperial")]
+        let url = apiURLComponents.url
+        print("\(url!)")
+        return url!
+    }
+    
+    mutating func buildURLForIDMulti(ID: Int)-> URL{
+        apiURLComponents.scheme = "https"
+        apiURLComponents.host = "api.openweathermap.org"
+        apiURLComponents.path = "/data/2.5/forecast"
+        apiURLComponents.queryItems = [
+            URLQueryItem(name:"id", value: String(ID)),
+            URLQueryItem(name:"APPID", value:
+                WeatherAPI.APIKey),
+            URLQueryItem(name: "units", value: "imperial")]
+        let url = apiURLComponents.url
+        print("\(url!)")
+        return url!
+    }
+    mutating func buildURLForLatLonMulti(latitude: Double, longitude: Double)-> URL{
+        apiURLComponents.scheme = "https"
+        apiURLComponents.host = "api.openweathermap.org"
+        apiURLComponents.path = "/data/2.5/forecast"
+        apiURLComponents.queryItems = [
+            URLQueryItem(name:"lat", value: String(latitude)),
+            URLQueryItem(name:"lon", value: String(longitude)),
+            URLQueryItem(name:"APPID", value:
+                WeatherAPI.APIKey),
+            URLQueryItem(name: "units", value: "imperial")]
+        let url = apiURLComponents.url
+        print("\(url!)")
+        return url!
+    }
+    
+    //MARK: - Make the requests
     //Get the current conditions for the day from the WeatherUnderground API
     func getWeatherConditions(for url: URL, completion: @escaping (Forecast)-> Void){
         
@@ -90,13 +167,13 @@ struct WeatherAPI{
             if error == nil{ //Handling the crash that occurs with no internet connection.
                 do{
                     if let data = data{
-                    let forecast = try JSONDecoder().decode(Forecast.self, from: data)
-                    
-                    //let myCast = Forecast(conditionsFromJSON: jsonData)
-                    
-                    OperationQueue.main.addOperation {
-                        completion(forecast)// Rewrite to handle the no internet connection error.
-                    }
+                        let forecast = try JSONDecoder().decode(Forecast.self, from: data)
+                        
+                        //let myCast = Forecast(conditionsFromJSON: jsonData)
+                        
+                        OperationQueue.main.addOperation {
+                            completion(forecast)// Rewrite to handle the no internet connection error.
+                        }
                     }
                     
                 }
@@ -115,23 +192,23 @@ struct WeatherAPI{
     
     //Get multiday forecast
     
-    func getWeatherForecast(completion: @escaping ([(Forecast)])-> Void){
+    func getWeatherForecast(url: URL, completion: @escaping ((MultiForecast))-> Void){
         
-        let url = URL(string: weatherForecastURL)
-        let urlRequest = URLRequest(url: url!)
+        let urlRequest = URLRequest(url: url)
         
         let task = webSession.dataTask(with: urlRequest){data,_, error in
-            
             if error == nil{// Handling the crash that occurs with no internet connection.
                 do{
-                    let jsonData = try JSONSerialization.jsonObject(with: data!, options: [])
-                    //let threeDayCast = Forecast(threeDayFromJSON: jsonData)
-                    OperationQueue.main.addOperation {
-                        completion([Forecast]())//Re-write this to handle the no internet connection error.
+                    if let data = data{
+                        let forecasts = try JSONDecoder().decode(MultiForecast.self, from: data)
+                        OperationQueue.main.addOperation {
+                            completion(forecasts)// Rewrite to handle the no internet connection error.
+                        }
                     }
                 }
                 catch{
-                    print("JSON Data Not Valid")
+                    print("JSON Data Not Valid. We had error \(error).")
+
                 }
                 
             }else{

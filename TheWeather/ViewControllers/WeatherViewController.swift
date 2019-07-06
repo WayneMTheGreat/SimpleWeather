@@ -17,47 +17,37 @@ class WeatherViewController: UIViewController,UITableViewDelegate, UITableViewDa
     @IBOutlet weak var weatherTableView: UITableView!
     @IBOutlet weak var locationLabel: UILabel!
     
-    
+    var passedLocation = String()
     var searchController: UISearchController!
     lazy var cities = {
         CityBuilder.buildCityList()
     }()
-    var sortedCities = [City]()
-    var filteredCities: [City]?
-    var resultsTableView: SearchResultsTableViewController!
-    var theWeather = WeatherAPI() //Initialize a WeatherAPI. Probably should be dependency injected. This needs to be corrected. Past me was correct. It is being dependency injected and then overwritten here as well.
-    var theForecast = Forecast(){
+    var sortedCities = [City](){
         didSet{
-            //Forecast set.
-            //setUpUIForSingleDay(forecast: theForecast)
+            print("I changed.")
+            
         }
     }
+    var filteredCities: [City]?
+    var resultsTableView: SearchResultsTableViewController!
+    var theWeather = WeatherAPI()
+    var theForecast = Forecast()
     var location:WeatherLocation?
-    var threeDay = [Forecast](){//When my 3 day forecast is set reload the tableview to show it on the MAIN THREAD. Also load the three day into the Store.
+    var fiveDay = MultiForecast(){
         didSet{
-            
             thisTable.reloadData()
-            //forecastStore?.addLocation(location: theForecast.weatherCity, tuple: (theForecast, threeDay))
         }
     }
     var forecastStore:ForecastStore?{//Struct to store the forecasts.
         didSet{
             print("I'm all locked in.")
-            //print("\(String(describing: forecastStore))")
         }
     }
-    
-    
-    
-    
     override func viewDidLoad() {
         super.viewDidLoad()
         DispatchQueue.global(qos: .userInitiated).async {
-            self.sortedCities = self.cities!.sorted(by: { $0.id > $1.id
-            })
+            self.sortedCities = CityBuilder.mergesSort(cities: self.cities!)
         }
-        
-        //searchBar.delegate = self
         resultsTableView = SearchResultsTableViewController()
         resultsTableView.tableView.delegate = self
         searchController = UISearchController(searchResultsController: resultsTableView)
@@ -67,51 +57,57 @@ class WeatherViewController: UIViewController,UITableViewDelegate, UITableViewDa
         self.navigationItem.searchController = searchController
         self.definesPresentationContext = true
         setUpUIForSingleDay(forecast: theForecast)
-       /* theWeather.getWeatherConditions(for: theWeather.buildURLForZip(zip: "21213")){cast in
-            self.theForecast = cast
-            self.temperatureLabel.text = ""
-            self.condtionsLabel.text = ""
-            self.locationLabel.text = ""
-            //self.setImageForWeatherUI()
-            
-        }*/
-       /* theWeather.getWeatherForecast() { (forecasts) in
-            self.threeDay = forecasts
-        }*/
-        
     }
     
-    func testingAction(){
+
+    func testingAction(enteredLocation: [String]){
         print("This function was called from a segue push")
+        self.passedLocation = enteredLocation[0]
+        if passedLocation.count == 5 && !passedLocation.contains(","){
+            theWeather.getWeatherConditions(for: theWeather.buildURLForZip(zip: passedLocation)) { (forecast) in
+                self.theForecast = forecast
+                self.setUpUIForSingleDay(forecast: forecast)
+            }
+            theWeather.getWeatherForecast(url: theWeather.buildURLForZipMulti(zip: passedLocation)) { (forecasts) in
+                self.fiveDay = forecasts
+            }
+        }else if enteredLocation.count == 2{
+            print("hold")
+            theWeather.getWeatherConditions(for: theWeather.buildURLForCityState(cityState: enteredLocation[0])){ (forecast) in
+                self.theForecast = forecast
+                self.setUpUIForSingleDay(forecast: forecast)
+            }
+            theWeather.getWeatherForecast(url: theWeather.buildURLForCityStateMulti(cityState: enteredLocation[0])) { (forecasts) in
+                self.fiveDay = forecasts
+            }
+        }
     }
-    
-    
     // MARK: - TableView DataSource Methods.
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return threeDay.count
+        return fiveDay.list?.count ?? 0
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        
         let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath) as! ForecastTableViewCell
-        
-        cell.conditionsLabel?.text = "Hold"
-        cell.temperatureLabel?.text = "Hold"
-        //setImageForWeather(cell: cell, indexPath: indexPath)
-        
+        cell.conditionsLabel?.text = fiveDay.list![indexPath.row].weather![0].description
+        cell.temperatureLabel?.text = String(describing: fiveDay.list![indexPath.row].main!.temp!.rounded())
+        setImageForWeather(cell: cell, indexPath: indexPath)
         return cell
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        
-        let cityIDURL = theWeather.buildURLForID(ID: (filteredCities?[indexPath.row].id)!)
-        theWeather.getWeatherConditions(for: cityIDURL){forecast in
-            self.theForecast = forecast
-            self.setUpUIForSingleDay(forecast: self.theForecast)
+        if tableView == thisTable{
+            print("Please fix me.")}
+        else{
+            let cityIDURL = theWeather.buildURLForID(ID: (filteredCities?[indexPath.row].id)!)
+            theWeather.getWeatherConditions(for: cityIDURL){forecast in
+                self.theForecast = forecast
+                self.setUpUIForSingleDay(forecast: self.theForecast)
+            }
+            searchController.isActive = false
         }
-        searchController.isActive = false
-    
+        
     }
     
     // MARK: - Location Action Methods
@@ -122,35 +118,18 @@ class WeatherViewController: UIViewController,UITableViewDelegate, UITableViewDa
         location?.locationManager.startUpdatingLocation()
         location?.locationManager.stopUpdatingLocation()
         let inLocation = location?.locationManager.location
-        if let latitude = inLocation?.coordinate.latitude{
+        if let latitude = inLocation?.coordinate.latitude, let longitude = inLocation?.coordinate.longitude{
             theWeather.location.latitude = Double(latitude)
-        }
-        if let longitude = inLocation?.coordinate.longitude{
             theWeather.location.longitude = Double(longitude)
+            theWeather.getWeatherConditions(for: theWeather.buildURLForLatLon(latitude: Double(latitude), longitude: Double(longitude))) {forecast in
+                self.theForecast = forecast
+                self.setUpUIForSingleDay(forecast: self.theForecast)
+            }
+            theWeather.getWeatherForecast(url: theWeather.buildURLForLatLonMulti(latitude: Double(latitude), longitude: Double(longitude))) { forecasts in
+                self.fiveDay = forecasts
+            }
+            
         }
-        
-        
-        /* //Redo the Main Forecast with the current locations weather.
-         theWeather.getWeatherConditions(for: <#URL#>) { (cast) in
-         self.theForecast = cast
-         self.temperatureLabel.text = ""
-         self.condtionsLabel.text = ""
-         self.locationLabel.text = ""
-         //self.setImageForWeatherUI()
-         //self.forecastStore?.addLocation(location: self.theForecast.weatherCity, tuple: (self.theForecast, []))//append new values to the store.
-         
-         
-         }
-         
-         
-         //Redo the 3 day Forecast with the current locations weather.
-         theWeather.getWeatherForecast { (forecasts) in
-         self.threeDay = forecasts
-         self.thisTable.reloadData()
-         
-         
-         }*/
-        
     }
     
     
@@ -162,7 +141,6 @@ class WeatherViewController: UIViewController,UITableViewDelegate, UITableViewDa
             if Int(searchString[0]
                 ) != nil && searchString[0].count == 5{
                 _ = theWeather.buildURLForZip(zip: searchString[0])
-                //theWeather.getWeatherConditions
             }else{
                 var value = searchString
                 guard !value.isEmpty else{return}
@@ -217,57 +195,58 @@ class WeatherViewController: UIViewController,UITableViewDelegate, UITableViewDa
         
         
     }
-    /*func setUpUIForMultiDay(forecast: [Forecast]){
-     self.theForecast = cast
-     self.temperatureLabel.text = String(cast.temperature)
-     self.condtionsLabel.text = cast.weather
-     self.locationLabel.text = cast.weatherCity
+    /* func setUpUIForMultiDay(forecasts: MultiForecast){
+     //self.theForecast = cast
+     guard let temp = forecasts.list.main?.temp else{return}
+     self.temperatureLabel.text = String(describing: temp.rounded()) //(0K − 273.15) × 9/5 + 32
+     self.condtionsLabel.text = forecasts.list.weather?[0].description
+     self.locationLabel.text = forecasts.list.name
      self.setImageForWeatherUI()
-     self.forecastStore?.addLocation(location: self.theForecast.weatherCity, tuple: (self.theForecast, []))//append new values to the store.
+     //self.forecastStore?.addLocation(location: self.theForecast.weatherCity, tuple: (self.theForecast, []))//append new values to the store.
      
      }*/
     
-    /*  func setImageForWeather( cell: ForecastTableViewCell, indexPath: IndexPath){
-     
-     switch self.threeDay[indexPath.row].weather{
-     case "overcast clouds: 85-100%":
-     cell.weatherImage.image = UIImage(named: "Overcast.PNG")
-     case "Partly Cloudy":
-     cell.weatherImage.image = UIImage(named: "Partly Cloudy.PNG")
-     case "Mostly Cloudy":
-     cell.weatherImage.image = UIImage(named: "Overcast.PNG")
-     case "Rain","Rainy":
-     cell.weatherImage.image = UIImage(named: "Rainy.PNG")
-     case "Chance of a Thunderstorm":
-     cell.weatherImage.image = UIImage(named: "Chance of thunderstorm.png")
-     case "Thunderstorm":
-     cell.weatherImage.image = UIImage(named: "Thunderstorm.png")
-     default:
-     cell.weatherImage.image = UIImage(named: "Sunny.PNG")
-     
-     }
-     
-     }*/
-     
-     func setImageForWeatherUI(){
-     switch theForecast.weather?[0].description{
-     case "overcast clouds", "broken clouds", "scatter clouds", "few clouds ":
-     self.weatherImage.image = UIImage(named: "Overcast.PNG")
-     case "Partly Cloudy":
-     self.weatherImage.image = UIImage(named: "Partly Cloudy.PNG")
-     case "Mostly Cloudy":
-     self.weatherImage.image = UIImage(named: "Overcast.PNG")
-     case "Rain","Rainy","Chance of Rain":
-     self.weatherImage.image = UIImage(named: "Rainy.PNG")
-     case "Chance of a Thunderstorm":
-     self.weatherImage.image = UIImage(named: "Chance of thunderstorm.png")
-     case "Thunderstorm":
-     self.weatherImage.image = UIImage(named: "Thunderstorm.png")
-     default:
-     self.weatherImage.image = UIImage(named: "Sunny.PNG")
-     
-     }
-     }
+    func setImageForWeather( cell: ForecastTableViewCell, indexPath: IndexPath){
+        
+        switch self.fiveDay.list![indexPath.row].weather![0].description{
+        case "overcast clouds", "broken clouds", "few clouds ":
+            cell.weatherImage.image = UIImage(named: "Overcast.PNG")
+        case "Partly Cloudy", "scatter clouds", "scattered clouds":
+            cell.weatherImage.image = UIImage(named: "Partly Cloudy.PNG")
+        case "Mostly Cloudy":
+            cell.weatherImage.image = UIImage(named: "Overcast.PNG")
+        case "rain","rainy","Chance of Rain", "light rain":
+            cell.weatherImage.image = UIImage(named: "Rainy.PNG")
+        case "Chance of a Thunderstorm":
+            cell.weatherImage.image = UIImage(named: "Chance of thunderstorm.png")
+        case "Thunderstorm":
+            cell.weatherImage.image = UIImage(named: "Thunderstorm.png")
+        default:
+            cell.weatherImage.image = UIImage(named: "Sunny.PNG")
+            
+        }
+        
+    }
+    
+    func setImageForWeatherUI(){
+        switch theForecast.weather?[0].description{
+        case "overcast clouds", "broken clouds", "few clouds ":
+            self.weatherImage.image = UIImage(named: "Overcast.PNG")
+        case "Partly Cloudy", "scatter clouds", "scattered clouds":
+            self.weatherImage.image = UIImage(named: "Partly Cloudy.PNG")
+        case "Mostly Cloudy":
+            self.weatherImage.image = UIImage(named: "Overcast.PNG")
+        case "rain","rainy","Chance of Rain", "light rain":
+            self.weatherImage.image = UIImage(named: "Rainy.PNG")
+        case "Chance of a Thunderstorm":
+            self.weatherImage.image = UIImage(named: "Chance of thunderstorm.png")
+        case "Thunderstorm":
+            self.weatherImage.image = UIImage(named: "Thunderstorm.png")
+        default:
+            self.weatherImage.image = UIImage(named: "Sunny.PNG")
+            
+        }
+    }
     /*
      // MARK: - Navigation
      
@@ -277,7 +256,6 @@ class WeatherViewController: UIViewController,UITableViewDelegate, UITableViewDa
      // Pass the selected object to the new view controller.
      }
      */
-    
 }
 
 // MARK: - Search Controller Delegate Methods

@@ -23,6 +23,7 @@ struct Forecast:Codable {
     var id: Int?
     var name:String?
     var cod: Int?
+    var dt_txt: String?
 }
 struct Coordinate:Codable{
     let lon: Double?

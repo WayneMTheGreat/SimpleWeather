@@ -37,26 +37,19 @@ class EntryViewController: UIViewController, UITextFieldDelegate{
     }
     
     func textFieldDidEndEditing(_ textField: UITextField) {
-        print("Done typing.")
         if let enteredLocation = textField.text{
             if enteredLocation.isEmpty{
                 print("Please enter a city & state or zip.")
                 myButton.isHidden = true
                 
             }else{
-                
-                print("we good. \(enteredLocation)")
-                //self.enteredLocation = enteredLocation
                 var stringArray = enteredLocation.components(separatedBy: ",")
-                print("\(stringArray)")
-                //stringArray = stringArray.map{ $0.trimmingCharacters(in: .whitespaces)
                 if stringArray[0].contains(" ") == true{
                     stringArray[0] = stringArray[0].replacingOccurrences(of: " ", with: " ")
                     if stringArray.count > 1 && stringArray[1].contains(" ") == true{
                         stringArray[1] = stringArray[1].replacingOccurrences(of: " ", with: "")
                     }
                 }
-                print("\(stringArray)")
                 self.enteredLocation = stringArray
                 myButton.isHidden = false
             }
@@ -85,8 +78,10 @@ class EntryViewController: UIViewController, UITextFieldDelegate{
             if self.enteredLocation[0].count == 5{
                 destinationVC.theWeather.zipString = self.enteredLocation[0]
             }else{
-                destinationVC.theWeather.searchString = self.enteredLocation}
-            destinationVC.testingAction()
+                destinationVC.theWeather.searchString = self.enteredLocation
+                
+            }
+            destinationVC.testingAction(enteredLocation: enteredLocation)
             destinationVC.location = location
         }
     }
