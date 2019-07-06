@@ -22,20 +22,9 @@ struct WeatherAPI{
         }
     }
     var url = URL(string: "")
-    private var weatherForecastURL = "https://api.wunderground.com/api/\(APIKey)/forecast/q/MD/Baltimore.json"
-    var State = ""
-    var City = ""
     private let webSession = URLSession(configuration: .default)
     
-    //Once the location is set update all URLS with the latest location.
-    var location = (latitude: 0.0, longitude:0.0){
-        didSet{
-            weatherURL = "https://api.wunderground.com/api/\(WeatherAPI.APIKey)/conditions/q/\(location.latitude),\(location.longitude).json"
-            weatherForecastURL = "https://api.wunderground.com/api/\(WeatherAPI.APIKey)/forecast/q/\(location.latitude),\(location.longitude).json"
-            
-        }
-    }
-    
+  
     //Allows City and state search.
     var searchString = [String]()
     
